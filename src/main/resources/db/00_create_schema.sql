@@ -1,8 +1,8 @@
 -- =====================================================
 -- PostgreSQL JDBC Client - Main Schema Creation Script
 -- =====================================================
--- This is the master script that orchestrates the entire schema creation process.
--- It executes all other SQL files in the correct order
+-- This is the main script that creates the complete database schema
+-- It executes all other SQL scripts in the correct order
 -- =====================================================
 
 -- Set session parameters for optimal schema creation
@@ -41,54 +41,38 @@ $$ LANGUAGE plpgsql;
 \echo 'PostgreSQL JDBC Client - Schema Creation Started'
 \echo '====================================================='
 
--- Record start time
-\set start_time `date +%s%3N`
-
 -- Log schema creation start
 SELECT log_schema_operation('1.0.0', 'SCHEMA_START', 'Starting complete schema creation process');
 
 \echo ''
 \echo '1. Creating database sequences...'
-\set seq_start `date +%s%3N`
 
 -- Execute sequences creation
 \i 01_create_sequences.sql
 
-\set seq_end `date +%s%3N`
-\set seq_duration :seq_end - :seq_start
-
-SELECT log_schema_operation('1.0.0', 'SEQUENCES', 'Created all database sequences', :seq_duration);
+SELECT log_schema_operation('1.0.0', 'SEQUENCES', 'Created all database sequences');
 \echo '   ✓ Sequences created successfully'
 
 \echo ''
 \echo '2. Creating database tables...'
-\set tables_start `date +%s%3N`
 
 -- Execute tables creation
 \i 02_create_tables.sql
 
-\set tables_end `date +%s%3N`
-\set tables_duration :tables_end - :tables_start
-
-SELECT log_schema_operation('1.0.0', 'TABLES', 'Created all 20 database tables', :tables_duration);
+SELECT log_schema_operation('1.0.0', 'TABLES', 'Created all 20 database tables');
 \echo '   ✓ Tables created successfully'
 
 \echo ''
 \echo '3. Creating database indexes...'
-\set indexes_start `date +%s%3N`
 
 -- Execute indexes creation
 \i 03_create_indexes.sql
 
-\set indexes_end `date +%s%3N`
-\set indexes_duration :indexes_end - :indexes_start
-
-SELECT log_schema_operation('1.0.0', 'INDEXES', 'Created all database indexes', :indexes_duration);
+SELECT log_schema_operation('1.0.0', 'INDEXES', 'Created all database indexes');
 \echo '   ✓ Indexes created successfully'
 
 \echo ''
 \echo '4. Creating additional database objects...'
-\set objects_start `date +%s%3N`
 
 -- =====================================================
 -- ADDITIONAL DATABASE OBJECTS
@@ -156,69 +140,28 @@ LEFT JOIN suppliers s ON p.supplier_id = s.id
 LEFT JOIN inventory i ON p.id = i.product_id
 WHERE p.is_active = TRUE;
 
--- Create functions for business logic
-CREATE OR REPLACE FUNCTION get_customer_orders(customer_id_param BIGINT)
-RETURNS TABLE(
-    order_id BIGINT,
-    order_number VARCHAR(50),
-    order_date TIMESTAMP,
-    status VARCHAR(20),
-    total_amount DECIMAL(12,2),
-    currency_code VARCHAR(3)
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT o.id, o.order_number, o.order_date, o.status, o.total_amount, o.currency_code
-    FROM orders o
-    WHERE o.customer_id = customer_id_param
-    ORDER BY o.order_date DESC;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION update_customer_totals(customer_id_param BIGINT)
-RETURNS VOID AS $$
-DECLARE
-    total_orders_count INTEGER;
-    total_spent_amount DECIMAL(15,2);
-    avg_order_value DECIMAL(10,2);
-BEGIN
-    SELECT 
-        COUNT(*),
-        COALESCE(SUM(total_amount), 0),
-        COALESCE(AVG(total_amount), 0)
-    INTO total_orders_count, total_spent_amount, avg_order_value
-    FROM orders 
-    WHERE customer_id = customer_id_param 
-    AND status IN ('DELIVERED', 'PAID');
-    
-    UPDATE customers 
-    SET 
-        total_orders = total_orders_count,
-        total_spent = total_spent_amount,
-        average_order_value = avg_order_value,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = customer_id_param;
-END;
-$$ LANGUAGE plpgsql;
-
-\set objects_end `date +%s%3N`
-\set objects_duration :objects_end - :objects_start
-
-SELECT log_schema_operation('1.0.0', 'OBJECTS', 'Created views, functions, and triggers', :objects_duration);
+SELECT log_schema_operation('1.0.0', 'OBJECTS', 'Created views, functions, and triggers');
 \echo '   ✓ Additional objects created successfully'
+
+\echo ''
+\echo '5. Setting up permissions and constraints...'
+
+-- Grant basic permissions (adjust as needed for your security model)
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO PUBLIC;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO PUBLIC;
+
+SELECT log_schema_operation('1.0.0', 'PERMISSIONS', 'Set up permissions and final constraints');
+\echo '   ✓ Permissions set successfully'
 
 -- =====================================================
 -- SCHEMA COMPLETION AND SUMMARY
 -- =====================================================
 
 \echo ''
-\echo '5. Generating schema summary...'
+\echo '6. Generating schema summary...'
 
--- Calculate total execution time
-\set end_time `date +%s%3N`
-\set total_duration :end_time - :start_time
-
-SELECT log_schema_operation('1.0.0', 'SCHEMA_COMPLETE', 'Schema creation completed successfully', :total_duration);
+-- Log completion
+SELECT log_schema_operation('1.0.0', 'SCHEMA_COMPLETE', 'Schema creation completed successfully');
 
 -- Display summary information
 \echo ''
@@ -252,9 +195,18 @@ FROM pg_views
 WHERE schemaname = 'public';
 
 \echo ''
+\echo 'EXECUTION LOG:'
+SELECT 
+    component,
+    description,
+    executed_at
+FROM schema_info 
+WHERE schema_version = '1.0.0'
+ORDER BY executed_at;
+
+\echo ''
 \echo '====================================================='
 \echo 'Schema creation completed successfully!'
-\echo 'Total execution time: ' :total_duration 'ms'
 \echo ''
 \echo 'The database now contains:'
 \echo '• 20 sequences for auto-incrementing IDs'

@@ -20,7 +20,7 @@
 
     <properties>
         <java.version>17</java.version>
-        <vault.version>3.0.0</vault.version>
+        <vault.version>3.0.2</vault.version>
     </properties>
 
     <dependencies>
